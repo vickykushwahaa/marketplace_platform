@@ -5,6 +5,12 @@ const wrapAsync = require("../utils/wrapAsync.js")
 const expressError = require("../utils/expressError.js")
 const {listingSchema, reviewSchema} = require("../schema.js");
 const { isLoggedIn, isOwner } = require("../middleware.js");
+const {storage} = require("../cloudConfig.js")
+
+const multer = require("multer")
+const upload = multer({ storage })
+
+const listingController = require("../controllers/listings.js");
 
 const validateListing = (req,res,next)=>{
     let {error} = listingSchema.validate(req.body);
@@ -17,88 +23,25 @@ const validateListing = (req,res,next)=>{
     }
 }
 
-//Index Route
-router.get("/", async(req, res) => {
-    const allListings = await listing.find({});
-    res.render("listings/index.ejs", {allListings})
-
-});
+router.route("/")
+.get(wrapAsync(listingController.index))
+.post(
+    isLoggedIn, 
+    upload.single('listing[image]'),
+    validateListing,
+    wrapAsync(listingController.createListing)
+);
 
 // new Route
-router.get("/new", isLoggedIn,(req, res) => {
-    res.render("listings/new.ejs")
-})
+router.get("/new", isLoggedIn,listingController.renderNewForm)
 
-//show Route
-router.get("/:id", wrapAsync(async(req, res) => {
-    let {id} = req.params;
-    const oneListing = await listing.findById(id).populate("reviews").populate("owner");
-    if(!oneListing){
-        req.flash("error", "Cannot find that Listing!");
-        res.redirect("/listings");
-    }
-    // console.log(oneListing);
-    res.render("listings/show.ejs",{ oneListing });
-})
-);
-
-//Create Route
-router.post("/", validateListing,isLoggedIn, wrapAsync(async(req, res) => {    
-    // Handle empty image field - remove it so Mongoose can apply default
-    if (!req.body.listing.image || req.body.listing.image.trim() === "") {
-        delete req.body.listing.image;
-    }
-    let newListings = new listing(req.body.listing);
-    newListings.owner = req.user._id;
-    await newListings.save();
-    req.flash("success", "Successfully added a new Listing!");
-    res.redirect("/listings");
- })
-);
+router.route("/:id")
+.get( wrapAsync(listingController.showListing))
+.put(isLoggedIn, isOwner,upload.single('listing[image]'), validateListing, wrapAsync(listingController.updateListing))
+.delete(isLoggedIn, wrapAsync(listingController.deleteListing))
 
 //Edit Route
-router.get("/:id/edit",isLoggedIn, wrapAsync(async(req, res) => {
-    let {id} = req.params;
-    const oneListing = await listing.findById(id);
-    await oneListing.save();
-    if(!oneListing){
-        req.flash("error", "Cannot find that Listing!");
-        res.redirect("/listings");
-    }
-    res.render("listings/edit.ejs",{oneListing});
-})
+router.get("/:id/edit",isLoggedIn, wrapAsync(listingController.editListing)
 );
-
-//Update Route
-router.put("/:id", validateListing,isLoggedIn, isOwner, wrapAsync(async(req, res) => {
-    let{id} = req.params;
-
-
-    // let Listing = await listing.findById(id);
-    // if(!currUser && Listing.owner.equals(res.locals.currUser._id)){
-    //     req.flash("error","You do not have permission to edit");
-    //     res.redirect(`/listings/${id}`);
-    // }
-
-    // Handle empty image field - remove it so Mongoose can apply default
-    if (!req.body.listing.image || req.body.listing.image.trim() === "") {
-        delete req.body.listing.image;
-    }
-    await listing.findByIdAndUpdate(id, {...req.body.listing});
-    req.flash("success", "Listing updated successfully!");
-    res.redirect(`/listings/${id}`)
-})
-);
-
-//Delete Route
-router.delete("/:id",isLoggedIn, wrapAsync(async(req, res) => {
-    let {id} = req.params;
-    const deletedListing = await listing.findByIdAndDelete(id);
-    console.log(deletedListing);
-    req.flash("success", `Listing ${deletedListing.title} has been removed!`);
-    res.redirect("/listings");
-  })
-);
-
 
 module.exports = router;
