@@ -48,9 +48,9 @@ app.set("views", path.join(__dirname,"views"));
 app.use(express.urlencoded({extended:true}));
 app.engine("ejs",ejsMate);
 
-// app.get("/", (req, res) =>{
-//     res.send("Hii, I am root")
-// });
+app.get("/", (req, res) =>{
+    res.send("Hii, I am root")
+});
 
 
 app.use(session(sessionOptions));
